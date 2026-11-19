@@ -51,6 +51,8 @@ class RaporMap extends Command
     private array $maps = [];       // table => [old => new]
     private array $mapNotes = [];   // table => [old => note]
     private array $manual = [];     // table => [old => new]
+    private array $skipped = [];    // table => [old => true] (excluded by decision, e.g. a user to be dropped)
+    private array $acknowledged = []; // 'class_change@odd|even' => [old pelajar id => true] (accepted class differences)
     private array $refUsers = [];   // old user id => [source => n]
 
     private array $pivot = [];      // pivotId => [year, type, sem]
@@ -62,6 +64,7 @@ class RaporMap extends Command
     private array $studentReligion = []; // old pelajar id => enum value
     private array $subjects = [];   // old subject id => ['religion' => ?string, 'is_religion' => bool]
     private array $rombelYear = []; // old rombel id => old academic year id
+    private array $scoreMismatchStudents = []; // old pelajar id => true
 
     public function handle(): int
     {
@@ -73,8 +76,10 @@ class RaporMap extends Command
             return self::FAILURE;
         }
 
-        if (! $this->dry && ! $this->option('force')
-            && ! $this->confirm('Is the database backed up and do you want to write the mappings?')) {
+        if (
+            ! $this->dry && ! $this->option('force')
+            && ! $this->confirm('Is the database backed up and do you want to write the mappings?')
+        ) {
             $this->warn('Cancelled.');
 
             return self::FAILURE;
@@ -133,12 +138,34 @@ class RaporMap extends Command
         $ok = true;
 
         $required = [
-            'pelajars', 'orang_tua_walis', 'users', 'roles', 'model_has_roles', 'rombels', 'rombel_pelajars',
-            'rombel_pengajars', 'nilais', 'kehadirans', 'catatan_wali_kelas', 'kokurikulers', 'ekstrakurikulers',
-            'ekskul_pelajars', 'mata_pelajarans', 'kurikulums', 'kurikulum_mata_pelajarans',
-            'jurusan_mata_pelajarans', 'jurusans', 'tahun_ajarans', 'semesters', 'tahun_ajaran_semesters',
-            'tahun_ajaran_kurikulums', 'pengaturans', 'data_sekolahs', 'template_nilai_capaians',
-            'template_kokurikuler_capaians', 'template_ekstrakurikuler_deskripsis',
+            'pelajars',
+            'orang_tua_walis',
+            'users',
+            'roles',
+            'model_has_roles',
+            'rombels',
+            'rombel_pelajars',
+            'rombel_pengajars',
+            'nilais',
+            'kehadirans',
+            'catatan_wali_kelas',
+            'kokurikulers',
+            'ekstrakurikulers',
+            'ekskul_pelajars',
+            'mata_pelajarans',
+            'kurikulums',
+            'kurikulum_mata_pelajarans',
+            'jurusan_mata_pelajarans',
+            'jurusans',
+            'tahun_ajarans',
+            'semesters',
+            'tahun_ajaran_semesters',
+            'tahun_ajaran_kurikulums',
+            'pengaturans',
+            'data_sekolahs',
+            'template_nilai_capaians',
+            'template_kokurikuler_capaians',
+            'template_ekstrakurikuler_deskripsis',
         ];
         $missing = array_filter($required, fn($table) => ! Schema::hasTable($this->prefix . $table));
         if ($missing) {
@@ -178,6 +205,18 @@ class RaporMap extends Command
         if ((string) config('rapor_migration.legacy_key') === '') {
             $this->error('RAPOR_LEGACY_APP_KEY is not set in .env.');
             $ok = false;
+        }
+
+        // Guard: APP_KEY of this project must be the SHARED key. If it is not, every NISN match would
+        // fail silently and anything written later would be unreadable by PINTAR/SIMKA.
+        $sample = DB::table('acd_students_vault')->whereNotNull('nisn_encrypted')->value('nisn_encrypted');
+        if ($sample !== null) {
+            try {
+                Crypt::decryptString($sample);
+            } catch (\Throwable $e) {
+                $this->error('APP_KEY of this project cannot decrypt acd_students_vault. It is not the shared key; copy it from PINTAR.');
+                $ok = false;
+            }
         }
 
         return $ok;
@@ -278,8 +317,12 @@ class RaporMap extends Command
 
     private function loadManual(): void
     {
-        foreach (DB::table('rapor_migration_maps')->where('note', 'manual')->get() as $row) {
-            $this->manual[$row->table_name][$row->old_id] = $row->new_id;
+        foreach (DB::table('rapor_migration_maps')->whereIn('note', ['manual', 'skipped'])->get() as $row) {
+            if ($row->note === 'skipped') {
+                $this->skipped[$row->table_name][$row->old_id] = true;
+            } else {
+                $this->manual[$row->table_name][$row->old_id] = $row->new_id;
+            }
         }
 
         $file = $this->option('overrides');
@@ -293,7 +336,16 @@ class RaporMap extends Command
             fgetcsv($handle, 0, ',', '"', '\\'); // header
             while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
                 if (count($row) >= 3 && $row[0] !== '' && $row[1] !== '') {
-                    $this->manual[trim($row[0])][trim($row[1])] = trim($row[2]) ?: null;
+                    $value = trim($row[2]);
+                    if (strtoupper($value) === 'SKIP') {
+                        // Intentionally excluded (e.g. a legacy user that must not be migrated).
+                        $this->skipped[trim($row[0])][trim($row[1])] = true;
+                    } elseif (strtoupper($value) === 'ACK') {
+                        // Accepted difference (e.g. class_change@even: the student moved class after the legacy roster).
+                        $this->acknowledged[trim($row[0])][trim($row[1])] = true;
+                    } else {
+                        $this->manual[trim($row[0])][trim($row[1])] = $value ?: null;
+                    }
                 }
             }
             fclose($handle);
@@ -443,8 +495,18 @@ class RaporMap extends Command
         $inClassGroup = $this->old('rombel_pelajars')->distinct()->pluck('pelajar_id')->flip()->all();
         $claimed = []; // student_id => old pelajar id
 
+        // Identity guard: a NISN match must also agree on NIS and name (catches NISNs swapped between students).
+        $pintarStudents = DB::table('acd_students')->get(['id', 'nis', 'name'])->keyBy('id');
+        $normalizeName = fn($value) => mb_strtolower(preg_replace('/\s+/', ' ', trim((string) $value)));
+
         foreach ($this->old('pelajars')->orderBy('id')->cursor() as $student) {
             $this->bump('pelajars', 'checked');
+
+            if (isset($this->skipped['pelajars'][$student->id])) {
+                $this->bump('pelajars', 'skipped_by_decision');
+
+                continue;
+            }
 
             $nisn = $this->dec('p', $student->nisn, 'pelajars', 'nisn', $student->id);
             $this->dec('p', $student->alamat, 'pelajars', 'alamat', $student->id);
@@ -533,14 +595,29 @@ class RaporMap extends Command
             $this->setMap('pelajars', $student->id, $studentId, $manual ? 'manual' : 'nisn');
             $this->bump('pelajars', 'mapped');
 
+            $pintar = $pintarStudents[$studentId] ?? null;
+            if ($pintar !== null) {
+                $legacyNis = trim((string) $student->nomor_induk);
+                if ($pintar->nis !== null && $legacyNis !== '' && trim((string) $pintar->nis) !== $legacyNis) {
+                    $this->flag('warn', 'nis_differs_from_pintar', 'pelajars', $student->id, "rapor_nis={$legacyNis} pintar_nis={$pintar->nis}");
+                }
+                if ($normalizeName($student->nama_lengkap) !== $normalizeName($pintar->name)) {
+                    $this->flag('info', 'name_differs_from_pintar', 'pelajars', $student->id, "rapor_nis={$legacyNis}");
+                }
+            }
+
             // Sanity check: data that should be identical must be identical (detects wrong matches).
             if ($vault !== null) {
-                if ($dobNormalized !== null && $vault->dob_hash !== null
-                    && ! hash_equals($vault->dob_hash, $this->blindIndexHash($dobNormalized))) {
+                if (
+                    $dobNormalized !== null && $vault->dob_hash !== null
+                    && ! hash_equals($vault->dob_hash, $this->blindIndexHash($dobNormalized))
+                ) {
                     $this->flag('info', 'dob_differs_from_pintar', 'pelajars', $student->id);
                 }
-                if ($canonical !== null && $vault->religion_hash !== null
-                    && ! hash_equals($vault->religion_hash, $this->blindIndexHash($canonical))) {
+                if (
+                    $canonical !== null && $vault->religion_hash !== null
+                    && ! hash_equals($vault->religion_hash, $this->blindIndexHash($canonical))
+                ) {
                     $this->flag('info', 'religion_differs_from_pintar', 'pelajars', $student->id);
                 }
             }
@@ -648,12 +725,20 @@ class RaporMap extends Command
         foreach ($this->old('users')->orderBy('id')->get() as $user) {
             $this->bump('users', 'checked');
 
+            if (isset($this->skipped['users'][$user->id])) {
+                $this->bump('users', 'skipped_by_decision');
+
+                continue;
+            }
+
             $email = $this->dec('s', $user->email, 'users', 'email', $user->id);
             $nip = $this->dec('s', $user->nip, 'users', 'nip', $user->id);
             $telephone = $this->dec('s', $user->telephone, 'users', 'telephone', $user->id);
             $specialization = $this->dec('s', $user->spesialisasi_agama, 'users', 'spesialisasi_agama', $user->id);
-            if ($specialization !== null
-                && $this->canonicalReligion(self::RELIGION_ALIAS[mb_strtolower(trim($specialization))] ?? $specialization) === null) {
+            if (
+                $specialization !== null
+                && $this->canonicalReligion(self::RELIGION_ALIAS[mb_strtolower(trim($specialization))] ?? $specialization) === null
+            ) {
                 $this->flag('warn', 'specialization_out_of_enum', 'users', $user->id, $specialization);
             }
 
@@ -839,21 +924,34 @@ class RaporMap extends Command
                 }
 
                 // Membership: legacy students of this rombel vs PINTAR class group members.
-                $both = $missing = $unmatched = 0;
+                $both = $missing = $unmatched = $acknowledged = 0;
+                $missingStudents = [];
                 foreach ($members[$rombel->id] ?? [] as $oldStudentId) {
                     $studentId = $this->getMap('pelajars', $oldStudentId);
                     if ($studentId === null) {
                         $unmatched++;
                     } elseif (isset($this->cgMembers[$hitId][$studentId])) {
                         $both++;
+                    } elseif (isset($this->acknowledged["class_change@{$type}"][$oldStudentId])) {
+                        $acknowledged++;
                     } else {
                         $missing++;
+                        $missingStudents[] = $oldStudentId;
                     }
                 }
                 $this->bump('class_group_members', 'matched', $both);
+                $this->bump('class_group_members', 'acknowledged_class_change', $acknowledged);
                 if ($missing > 0) {
-                    $this->flag('warn', 'class_members_differ_from_pintar', 'rombels', $rombel->id,
-                        "{$rombel->nama} {$type}: matched={$both} not_in_pintar={$missing} unmatched_students={$unmatched}");
+                    $this->flag(
+                        'warn',
+                        'class_members_differ_from_pintar',
+                        'rombels',
+                        $rombel->id,
+                        "{$rombel->nama} {$type}: matched={$both} not_in_pintar={$missing} unmatched_students={$unmatched}"
+                    );
+                    foreach ($missingStudents as $oldStudentId) {
+                        $this->flag('info', 'student_not_in_pintar_class_group', 'pelajars', $oldStudentId, "{$rombel->nama} {$type}");
+                    }
                 }
             }
         }
@@ -889,8 +987,13 @@ class RaporMap extends Command
             ->select('rp.rombel_id', 'n.mata_pelajaran_id', 'n.tahun_ajaran_semester_id', DB::raw('COUNT(DISTINCT n.guru_id) g'))
             ->get();
         foreach ($conflicts as $conflict) {
-            $this->flag('warn', 'teacher_conflict_subject_semester', 'rombel_pengajars', $conflict->rombel_id,
-                "subject={$conflict->mata_pelajaran_id} semester={$conflict->tahun_ajaran_semester_id} teachers={$conflict->g}");
+            $this->flag(
+                'warn',
+                'teacher_conflict_subject_semester',
+                'rombel_pengajars',
+                $conflict->rombel_id,
+                "subject={$conflict->mata_pelajaran_id} semester={$conflict->tahun_ajaran_semester_id} teachers={$conflict->g}"
+            );
         }
 
         // Teacher recorded on scores, per (assignment, semester).
@@ -990,8 +1093,14 @@ class RaporMap extends Command
                 }
                 $classGroupId = $this->getMap('rombels@' . $type, $assignment->rombel_id);
                 if ($classGroupId !== null && ! isset($this->cgMembers[$classGroupId][$studentId])) {
-                    $inSemester = $this->membership[$studentId][$semesterId] ?? [];
-                    $this->flag('warn', $inSemester ? 'score_class_not_student_class' : 'score_student_no_class_in_semester', 'nilais', $score->id);
+                    if (isset($this->acknowledged["class_change@{$type}"][$score->pelajar_id])) {
+                        // Accepted: the score belongs to the former class and stays as history (not printed).
+                        $this->flag('info', 'score_kept_as_class_history', 'nilais', $score->id, "student={$score->pelajar_id} rombel={$assignment->rombel_id} {$type}");
+                    } else {
+                        $inSemester = $this->membership[$studentId][$semesterId] ?? [];
+                        $this->flag('warn', $inSemester ? 'score_class_not_student_class' : 'score_student_no_class_in_semester', 'nilais', $score->id, "student={$score->pelajar_id} rombel={$assignment->rombel_id} {$type}");
+                        $this->scoreMismatchStudents[$score->pelajar_id] = true;
+                    }
                 }
             }
 
@@ -1004,6 +1113,8 @@ class RaporMap extends Command
                 }
             }
         }
+
+        $this->bump('nilais', 'class_mismatch_distinct_students', count($this->scoreMismatchStudents));
     }
 
     // ========================================================================
@@ -1029,7 +1140,8 @@ class RaporMap extends Command
                 continue;
             }
             if (! isset($this->cgMembers[$classGroupId][$studentId])) {
-                $this->flag('warn', 'attendance_student_not_member', 'kehadirans', $attendance->id);
+                $level = isset($this->acknowledged["class_change@{$type}"][$attendance->pelajar_id]) ? 'info' : 'warn';
+                $this->flag($level, 'attendance_student_not_member', 'kehadirans', $attendance->id, "student={$attendance->pelajar_id} rombel={$attendance->rombel_id} {$type}");
             }
         }
     }
@@ -1279,6 +1391,11 @@ class RaporMap extends Command
     {
         $known = $this->old('users')->pluck('id')->flip()->all();
         foreach ($this->refUsers as $userId => $sources) {
+            if (isset($this->skipped['users'][$userId])) {
+                $this->bump('users', 'references_to_skipped_user', array_sum($sources));
+
+                continue;
+            }
             $detail = implode('; ', array_map(fn($source, $n) => "{$source}={$n}", array_keys($sources), $sources));
             if (! isset($known[$userId])) {
                 $this->flag('warn', 'user_referenced_missing_in_users', 'users', $userId, $detail);
@@ -1314,6 +1431,12 @@ class RaporMap extends Command
                 if (! isset($this->maps[$table][$old])) {
                     $rows[] = ['table_name' => $table, 'old_id' => $old, 'new_id' => $new, 'note' => 'manual', 'created_at' => $now, 'updated_at' => $now];
                 }
+            }
+        }
+
+        foreach ($this->skipped as $table => $items) {
+            foreach (array_keys($items) as $old) {
+                $rows[] = ['table_name' => $table, 'old_id' => $old, 'new_id' => null, 'note' => 'skipped', 'created_at' => $now, 'updated_at' => $now];
             }
         }
 

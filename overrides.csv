@@ -1,0 +1,8 @@
+table_name,old_id,new_id
+users,019abdb0-e1b0-72b1-b9eb-c8e442331a64,SKIP
+pelajars,f9d1aa7c-a325-11ef-9f32-bc2411077983,f9d1aa7c-a325-11ef-9f32-bc2411077983
+pelajars,f9d2294a-a325-11ef-9f32-bc2411077983,f9d2294a-a325-11ef-9f32-bc2411077983
+pelajars,f8a14290-a325-11ef-9f32-bc2411077983,SKIP
+class_change@even,c67fe976-94f4-11f0-a641-bc2411077983,ACK
+class_change@even,c6ed5386-94f4-11f0-a641-bc2411077983,ACK
+class_change@even,c75811e3-94f4-11f0-a641-bc2411077983,ACK
