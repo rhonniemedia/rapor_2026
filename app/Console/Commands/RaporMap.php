@@ -76,10 +76,8 @@ class RaporMap extends Command
             return self::FAILURE;
         }
 
-        if (
-            ! $this->dry && ! $this->option('force')
-            && ! $this->confirm('Is the database backed up and do you want to write the mappings?')
-        ) {
+        if (! $this->dry && ! $this->option('force')
+            && ! $this->confirm('Is the database backed up and do you want to write the mappings?')) {
             $this->warn('Cancelled.');
 
             return self::FAILURE;
@@ -138,34 +136,12 @@ class RaporMap extends Command
         $ok = true;
 
         $required = [
-            'pelajars',
-            'orang_tua_walis',
-            'users',
-            'roles',
-            'model_has_roles',
-            'rombels',
-            'rombel_pelajars',
-            'rombel_pengajars',
-            'nilais',
-            'kehadirans',
-            'catatan_wali_kelas',
-            'kokurikulers',
-            'ekstrakurikulers',
-            'ekskul_pelajars',
-            'mata_pelajarans',
-            'kurikulums',
-            'kurikulum_mata_pelajarans',
-            'jurusan_mata_pelajarans',
-            'jurusans',
-            'tahun_ajarans',
-            'semesters',
-            'tahun_ajaran_semesters',
-            'tahun_ajaran_kurikulums',
-            'pengaturans',
-            'data_sekolahs',
-            'template_nilai_capaians',
-            'template_kokurikuler_capaians',
-            'template_ekstrakurikuler_deskripsis',
+            'pelajars', 'orang_tua_walis', 'users', 'roles', 'model_has_roles', 'rombels', 'rombel_pelajars',
+            'rombel_pengajars', 'nilais', 'kehadirans', 'catatan_wali_kelas', 'kokurikulers', 'ekstrakurikulers',
+            'ekskul_pelajars', 'mata_pelajarans', 'kurikulums', 'kurikulum_mata_pelajarans',
+            'jurusan_mata_pelajarans', 'jurusans', 'tahun_ajarans', 'semesters', 'tahun_ajaran_semesters',
+            'tahun_ajaran_kurikulums', 'pengaturans', 'data_sekolahs', 'template_nilai_capaians',
+            'template_kokurikuler_capaians', 'template_ekstrakurikuler_deskripsis',
         ];
         $missing = array_filter($required, fn($table) => ! Schema::hasTable($this->prefix . $table));
         if ($missing) {
@@ -173,7 +149,7 @@ class RaporMap extends Command
             $ok = false;
         }
 
-        foreach (['rapor_migration_maps', 'rapor_scores', 'rapor_class_group_subjects'] as $table) {
+        foreach (['rapor_migration_maps', 'rapor_scores', 'rapor_class_group_subjects', 'rapor_extracurriculars'] as $table) {
             if (! Schema::hasTable($table)) {
                 $this->error("Target table {$table} does not exist. Run the schema migrations first.");
                 $ok = false;
@@ -182,8 +158,6 @@ class RaporMap extends Command
 
         $columns = [
             'core_schools' => 'education_level',
-            'acd_students' => 'family_status',
-            'acd_extracurriculars' => 'status',
         ];
         foreach ($columns as $table => $column) {
             if (! Schema::hasColumn($table, $column)) {
@@ -608,16 +582,12 @@ class RaporMap extends Command
 
             // Sanity check: data that should be identical must be identical (detects wrong matches).
             if ($vault !== null) {
-                if (
-                    $dobNormalized !== null && $vault->dob_hash !== null
-                    && ! hash_equals($vault->dob_hash, $this->blindIndexHash($dobNormalized))
-                ) {
+                if ($dobNormalized !== null && $vault->dob_hash !== null
+                    && ! hash_equals($vault->dob_hash, $this->blindIndexHash($dobNormalized))) {
                     $this->flag('info', 'dob_differs_from_pintar', 'pelajars', $student->id);
                 }
-                if (
-                    $canonical !== null && $vault->religion_hash !== null
-                    && ! hash_equals($vault->religion_hash, $this->blindIndexHash($canonical))
-                ) {
+                if ($canonical !== null && $vault->religion_hash !== null
+                    && ! hash_equals($vault->religion_hash, $this->blindIndexHash($canonical))) {
                     $this->flag('info', 'religion_differs_from_pintar', 'pelajars', $student->id);
                 }
             }
@@ -735,10 +705,8 @@ class RaporMap extends Command
             $nip = $this->dec('s', $user->nip, 'users', 'nip', $user->id);
             $telephone = $this->dec('s', $user->telephone, 'users', 'telephone', $user->id);
             $specialization = $this->dec('s', $user->spesialisasi_agama, 'users', 'spesialisasi_agama', $user->id);
-            if (
-                $specialization !== null
-                && $this->canonicalReligion(self::RELIGION_ALIAS[mb_strtolower(trim($specialization))] ?? $specialization) === null
-            ) {
+            if ($specialization !== null
+                && $this->canonicalReligion(self::RELIGION_ALIAS[mb_strtolower(trim($specialization))] ?? $specialization) === null) {
                 $this->flag('warn', 'specialization_out_of_enum', 'users', $user->id, $specialization);
             }
 
@@ -942,13 +910,8 @@ class RaporMap extends Command
                 $this->bump('class_group_members', 'matched', $both);
                 $this->bump('class_group_members', 'acknowledged_class_change', $acknowledged);
                 if ($missing > 0) {
-                    $this->flag(
-                        'warn',
-                        'class_members_differ_from_pintar',
-                        'rombels',
-                        $rombel->id,
-                        "{$rombel->nama} {$type}: matched={$both} not_in_pintar={$missing} unmatched_students={$unmatched}"
-                    );
+                    $this->flag('warn', 'class_members_differ_from_pintar', 'rombels', $rombel->id,
+                        "{$rombel->nama} {$type}: matched={$both} not_in_pintar={$missing} unmatched_students={$unmatched}");
                     foreach ($missingStudents as $oldStudentId) {
                         $this->flag('info', 'student_not_in_pintar_class_group', 'pelajars', $oldStudentId, "{$rombel->nama} {$type}");
                     }
@@ -987,13 +950,8 @@ class RaporMap extends Command
             ->select('rp.rombel_id', 'n.mata_pelajaran_id', 'n.tahun_ajaran_semester_id', DB::raw('COUNT(DISTINCT n.guru_id) g'))
             ->get();
         foreach ($conflicts as $conflict) {
-            $this->flag(
-                'warn',
-                'teacher_conflict_subject_semester',
-                'rombel_pengajars',
-                $conflict->rombel_id,
-                "subject={$conflict->mata_pelajaran_id} semester={$conflict->tahun_ajaran_semester_id} teachers={$conflict->g}"
-            );
+            $this->flag('warn', 'teacher_conflict_subject_semester', 'rombel_pengajars', $conflict->rombel_id,
+                "subject={$conflict->mata_pelajaran_id} semester={$conflict->tahun_ajaran_semester_id} teachers={$conflict->g}");
         }
 
         // Teacher recorded on scores, per (assignment, semester).
@@ -1223,7 +1181,6 @@ class RaporMap extends Command
         }
         $ids = $extracurriculars->pluck('id')->flip()->all();
 
-        $withMembers = [];
         $seen = [];
         foreach ($this->old('ekskul_pelajars')->orderBy('id')->cursor() as $member) {
             $this->bump('ekskul_pelajars', 'checked');
@@ -1251,15 +1208,12 @@ class RaporMap extends Command
                 $this->flag('warn', 'extracurricular_member_duplicate', 'ekskul_pelajars', $member->id);
             }
             $seen[$key] = true;
-            $withMembers[$member->ekstrakurikuler_id . '|' . $member->tahun_ajaran_semester_id] = true;
         }
 
-        $this->bump('extracurriculars', 'semester_rows_from_members', count($withMembers));
-        $withMemberIds = [];
-        foreach (array_keys($withMembers) as $key) {
-            $withMemberIds[explode('|', $key)[0]] = true;
-        }
-        $this->bump('extracurriculars', 'without_members_created_in_active_semester', count($ids) - count($withMemberIds));
+        // Extracurriculars are global in rapor_*; the supervisor is copied to every mapped semester.
+        $this->bump('extracurriculars', 'rows', count($ids));
+        $this->bump('extracurriculars', 'supervisor_rows', count($ids) * count(array_unique(array_column($this->pivot, 'sem'))));
+        $this->bump('extracurriculars', 'members_to_copy', count($seen));
     }
 
     // ========================================================================
