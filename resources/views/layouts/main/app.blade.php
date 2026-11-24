@@ -17,13 +17,16 @@
     {{-- Backdrop for the mobile sidebar --}}
     <div x-show="sidebarOpen" x-cloak x-transition.opacity class="fixed inset-0 z-40 bg-black/40 lg:hidden" @click="sidebarOpen = false"></div>
 
-    <div class="min-h-screen lg:pl-[280px]">
+    <main class="flex-1 lg:ml-[280px] flex flex-col bg-white min-h-screen overflow-x-hidden">
+
+        <!-- Topbar -->
         <x-layout.app-topbar />
 
-        <main class="p-5 lg:p-8">
-            @yield('content')
-        </main>
-    </div>
+        <!-- Content -->
+        @yield('content')
+        <!-- end content -->
+
+    </main>
 
     {{-- Global SweetAlert + target of htmx modals (loaded with hx-get into this container) --}}
     <x-ui.sweet-alert />

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Academics\Curriculum\CurriculumController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Home\HomeController;
 use App\Http\Controllers\Settings\AcademicPeriodController;
@@ -27,4 +28,15 @@ Route::middleware(['auth', AuthorizeAppAccess::class, ShareAcademicPeriod::class
 
     // Working features (scores, attendance, reports, ...) are added per stage and are protected with
     // ->middleware('can:use-rapor') plus Policies on the objects.
+});
+
+Route::prefix('academics/curriculum')->name('rapor.curricula.')->controller(CurriculumController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/create', 'create')->name('create');
+    Route::post('/', 'store')->name('store');
+    Route::get('/{curriculum}/edit', 'edit')->name('edit');
+    Route::put('/{curriculum}', 'update')->name('update');
+    Route::patch('/{curriculum}/status', 'toggleStatus')->name('toggle-status');
+    Route::get('/{curriculum}/delete', 'confirmDelete')->name('confirm-delete');
+    Route::delete('/{curriculum}', 'destroy')->name('destroy');
 });
