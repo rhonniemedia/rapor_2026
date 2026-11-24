@@ -60,14 +60,14 @@ class CurriculumController extends Controller
     /*  Aksi tulis. Respons = fragmen tabel (#curricula-container)        */
     /* ------------------------------------------------------------------ */
 
-    public function store(CurriculumRequest $request)
+    public function store(Request $request)
     {
         Curriculum::create($request->validated());
 
         return $this->tableResponse($request, $this->notify('Kurikulum berhasil ditambahkan.'));
     }
 
-    public function update(CurriculumRequest $request, Curriculum $curriculum)
+    public function update(Request $request, Curriculum $curriculum)
     {
         $curriculum->update($request->validated());
 
