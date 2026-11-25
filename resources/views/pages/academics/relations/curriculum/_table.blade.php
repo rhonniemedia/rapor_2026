@@ -10,7 +10,7 @@
         <thead>
             <tr class="border-b border-border">
                 <x-ui.table.th width="w-[30%]" sub="Nama | Kode">Kurikulum</x-ui.table.th>
-                <x-ui.table.th width="w-[30%]" sub="Aktif / Arsip">Status</x-ui.table.th>
+                <x-ui.table.th width="w-[30%]" sub="Aktif | Arsip">Status</x-ui.table.th>
                 <x-ui.table.th width="w-[30%]" sub="Mapel | Tahun Ajaran">Pemakaian</x-ui.table.th>
                 <x-ui.table.th width="w-[10%]" sub="Kelola">Aksi</x-ui.table.th>
             </tr>
@@ -22,7 +22,7 @@
                 <x-ui.table.td>
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                            <i data-lucide="library-big" class="size-5 text-primary"></i>
+                            <i data-lucide="swatch-book" class="size-5 text-primary"></i>
                         </div>
                         <div class="min-w-0 flex-1">
                             <x-ui.table.text :text="$c->name" class="font-semibold text-foreground text-sm" />
@@ -58,7 +58,7 @@
 
                 {{-- Kolom 4: Aksi --}}
                 <x-ui.table.td>
-                    @include('pages.academics.curriculum.partials._actions', ['c' => $c])
+                    @include('pages.academics.relations.curriculum._actions', ['c' => $c])
                 </x-ui.table.td>
             </tr>
             @empty
@@ -81,7 +81,7 @@
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                        <i data-lucide="library-big" class="size-5 text-primary"></i>
+                        <i data-lucide="swatch-book" class="size-5 text-primary"></i>
                     </div>
                     <div class="min-w-0">
                         <div class="font-semibold text-foreground text-sm truncate">{{ $c->name }}</div>
@@ -107,7 +107,7 @@
             </div>
 
             <div class="mt-3 flex items-center justify-end">
-                @include('pages.academics.curriculum.partials._actions', ['c' => $c])
+                @include('pages.academics.relations.curriculum._actions', ['c' => $c])
             </div>
         </div>
         @empty

@@ -61,7 +61,7 @@ $roleLabel = ['superadmin' => 'Super Admin', 'admin' => 'Admin', 'user' => 'Guru
             </button>
 
             <div x-show="open" x-collapse class="flex flex-col gap-1">
-                <a href="#" class="group cursor-pointer">
+                <a href="{{ route('rapor.curricula.index') }}" class="group cursor-pointer">
                     <div class="flex items-center justify-between rounded-xl p-3 transition-all duration-300 {{ request()->routeIs('academic.relations.*') ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted' }}">
                         <div class="flex items-center gap-3">
                             <i data-lucide="git-branch"

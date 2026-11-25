@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Academics\Curriculum;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Rapor\CurriculumRequest;
+use App\Models\CoreAcademicYear;
 use App\Models\Rapor\Curriculum;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 
 class CurriculumController extends Controller
 {
-    private const VIEW = 'pages.academics.curriculum';
+    private const VIEW = 'pages.academics.relations';
     private const PER_PAGE = 10;
 
     /* ------------------------------------------------------------------ */
@@ -23,6 +23,7 @@ class CurriculumController extends Controller
 
         return view(self::VIEW . '.index', [
             'curricula' => $this->paginate($filters),
+            'academicYears' => $request->headers->has('HX-Request') ? collect() : CoreAcademicYear::forList()->get(),
             'search' => $filters['search'],
             'filterStatus' => $filters['status'],
             'statusOptions' => Curriculum::statusOptions(),
@@ -35,7 +36,7 @@ class CurriculumController extends Controller
 
     public function create()
     {
-        return view(self::VIEW . '.partials._modal-form', [
+        return view(self::VIEW . '.curriculum._modal-form', [
             'curriculum' => new Curriculum(['status' => Curriculum::STATUS_ACTIVE]),
             'statusOptions' => Curriculum::statusOptions(),
         ]);
@@ -43,7 +44,7 @@ class CurriculumController extends Controller
 
     public function edit(Curriculum $curriculum)
     {
-        return view(self::VIEW . '.partials._modal-form', [
+        return view(self::VIEW . '.curriculum._modal-form', [
             'curriculum' => $curriculum,
             'statusOptions' => Curriculum::statusOptions(),
         ]);
@@ -53,7 +54,7 @@ class CurriculumController extends Controller
     {
         $curriculum->loadCount(['academicYearCurricula', 'curriculumSubjects']);
 
-        return view(self::VIEW . '.partials._modal-delete', compact('curriculum'));
+        return view(self::VIEW . '.curriculum._modal-delete', compact('curriculum'));
     }
 
     /* ------------------------------------------------------------------ */
@@ -151,7 +152,7 @@ class CurriculumController extends Controller
         }
 
         return response()
-            ->view(self::VIEW . '.partials._table', [
+            ->view(self::VIEW . '.curriculum._table', [
                 'curricula' => $list,
                 'listUrl' => $list->url($list->currentPage()),
             ])
