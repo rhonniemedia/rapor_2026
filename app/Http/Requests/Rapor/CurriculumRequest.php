@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Admin\Rapor;
+namespace App\Http\Requests\Rapor;
 
 use App\Models\Rapor\Curriculum;
 use Illuminate\Contracts\Validation\Validator;
@@ -82,7 +82,7 @@ class CurriculumRequest extends FormRequest
 
         throw new HttpResponseException(
             response()
-                ->view('pages.admin.rapor.curricula.partials._modal-form', [
+                ->view('pages.academics.relations.curriculum._modal-form', [
                     'curriculum' => $curriculum,
                     'statusOptions' => Curriculum::statusOptions(),
                     'errors' => $errors,

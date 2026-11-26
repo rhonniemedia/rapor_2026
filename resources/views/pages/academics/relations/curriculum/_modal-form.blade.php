@@ -1,16 +1,16 @@
-{{-- File: resources/views/pages/admin/rapor/curricula/partials/_modal-form.blade.php --}}
+{{-- File: resources/views/pages/academics/relations/curriculum/_modal-form.blade.php --}}
 @php
-    $curriculum = $curriculum ?? new \App\Models\Rapor\Curriculum();
-    $isEdit = $curriculum->exists;
-    $modalTitle = $isEdit ? 'Edit Kurikulum' : 'Tambah Kurikulum';
-    $actionUrl = $isEdit
-        ? route('admin.rapor.curricula.update', $curriculum->id)
-        : route('admin.rapor.curricula.store');
+$curriculum = $curriculum ?? new \App\Models\Rapor\Curriculum();
+$isEdit = $curriculum->exists;
+$modalTitle = $isEdit ? 'Edit Kurikulum' : 'Tambah Kurikulum';
+$actionUrl = $isEdit
+? route('rapor.curricula.update', $curriculum->id)
+: route('rapor.curricula.store');
 
-    $nameValue = old('name', $curriculum->name ?? '');
-    $codeValue = old('code', $curriculum->code ?? '');
-    $descriptionValue = old('description', $curriculum->description ?? '');
-    $statusValue = old('status', $curriculum->status ?? 'active');
+$nameValue = old('name', $curriculum->name ?? '');
+$codeValue = old('code', $curriculum->code ?? '');
+$descriptionValue = old('description', $curriculum->description ?? '');
+$statusValue = old('status', $curriculum->status ?? 'active');
 @endphp
 
 <div x-data="{ open: false }"

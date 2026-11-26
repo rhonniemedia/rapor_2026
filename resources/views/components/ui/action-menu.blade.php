@@ -9,6 +9,7 @@
       method   (string)  get|post|patch|put|delete  (default: get)
       target   (string)  selector hx-target          (default: #modal-container)
       swap     (string)  hx-swap                     (default: innerHTML)
+      select   (string)  hx-select                   (default: unset, tidak mewarisi dari elemen induk)
       variant  (string)  default|primary|warning|danger (default: default)
       divider  (bool)    garis pemisah SEBELUM item di mode dropdown
       show     (bool)    false = action disembunyikan (default: true)
@@ -42,6 +43,7 @@ $a['hx'] = new ComponentAttributeBag([
 "hx-{$method}" => $a['url'],
 'hx-target' => $a['target'] ?? '#modal-container',
 'hx-swap' => $a['swap'] ?? 'innerHTML',
+'hx-select' => $a['select'] ?? 'unset', // putus pewarisan hx-select dari container induk
 ]);
 return $a;
 })
@@ -110,6 +112,7 @@ return $a;
 
         <template x-teleport="body">
             <div x-ref="menu"
+                x-init="$nextTick(() => window.htmx && window.htmx.process($el))"
                 x-show="open"
                 x-cloak
                 @click.outside="if (!$refs.btn.contains($event.target)) open = false"

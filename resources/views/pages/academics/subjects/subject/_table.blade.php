@@ -1,93 +1,80 @@
-{{-- Tabel Mata Pelajaran --}}
-@php
-$typeMap = [
-'wajib' => [
-'label' => 'Wajib',
-'badge' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-'dot' => 'bg-emerald-500',
-],
-'peminatan' => [
-'label' => 'Peminatan',
-'badge' => 'bg-sky-50 text-sky-700 border-sky-200',
-'dot' => 'bg-sky-500',
-],
-'mulok' => [
-'label' => 'Muatan Lokal',
-'badge' => 'bg-amber-50 text-amber-700 border-amber-200',
-'dot' => 'bg-amber-500',
-],
-'default' => [
-'label' => 'Lainnya',
-'badge' => 'bg-slate-50 text-slate-700 border-slate-200',
-'dot' => 'bg-slate-400',
-],
-];
-@endphp
-
-<div id="subjects-container">
+<div id="subjects-container"
+    hx-get="{{ $listUrl ?? request()->fullUrl() }}"
+    hx-trigger="refreshSubjectsList from:body"
+    hx-select="#subjects-container"
+    hx-swap="outerHTML"
+    hx-headers='{"X-CSRF-TOKEN": "{{ csrf_token() }}"}'>
 
     {{-- ============ 1. DESKTOP TABLE ============ --}}
     <x-ui.table>
         <thead>
             <tr class="border-b border-border">
-                <x-ui.table.th width="w-[35%]" sub="Nama | Kode">Mata Pelajaran</x-ui.table.th>
-                <x-ui.table.th width="w-[20%]" sub="Pengelompokan">Kelompok</x-ui.table.th>
-                <x-ui.table.th width="w-[15%]" sub="Wajib | Peminatan">Jenis</x-ui.table.th>
-                <x-ui.table.th width="w-[20%]" sub="Kurikulum | Jurusan">Pemakaian</x-ui.table.th>
+                <x-ui.table.th width="w-[40%]" sub="Mata Pelajaran | Kode">Mata Pelajaran</x-ui.table.th>
+                <x-ui.table.th width="w-[30%]" sub="Umum | Agama (Terkait)">Kategori</x-ui.table.th>
+                <x-ui.table.th width="w-[20%]" sub="Aktif | Arsip">Status</x-ui.table.th>
                 <x-ui.table.th width="w-[10%]" sub="Kelola">Aksi</x-ui.table.th>
             </tr>
         </thead>
         <tbody class="divide-y divide-border border-b border-border">
             @forelse ($subjects as $s)
-            @php
-            $typeKey = is_string($s['type'] ?? null) && $s['type'] !== '' ? $s['type'] : 'default';
-            $t = $typeMap[$typeKey] ?? $typeMap['default'];
-            @endphp
-            <tr id="row-subject-{{ $s['id'] }}" data-search="{{ $s['name'] }} {{ $s['code'] }} {{ $s['group'] }}" class="group transition-colors hover:bg-muted/40">
+            <tr id="row-subject-{{ $s->id }}" class="group transition-colors hover:bg-muted/40">
+                {{-- Kolom 1: Mata Pelajaran (Nama | Kode) --}}
                 <x-ui.table.td>
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                             <i data-lucide="book-open" class="size-5 text-primary"></i>
                         </div>
                         <div class="min-w-0 flex-1">
-                            <div class="font-semibold text-foreground text-sm truncate">{{ $s['name'] }}</div>
-                            <div class="text-xs text-secondary mt-1 font-mono font-semibold text-foreground/80">{{ $s['code'] }}</div>
+                            <x-ui.table.text :text="$s->name" class="font-semibold text-foreground text-sm" />
+                            <div class="text-xs text-secondary mt-1 font-mono font-semibold text-foreground/80 truncate">
+                                {{ $s->code }}
+                            </div>
                         </div>
                     </div>
                 </x-ui.table.td>
 
+                {{-- Kolom 2: Kategori (Umum | Agama (Terkait)) --}}
                 <x-ui.table.td>
-                    <span class="text-sm font-medium text-foreground">{{ $s['group'] }}</span>
-                </x-ui.table.td>
-
-                <x-ui.table.td>
-                    <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold {{ $t['badge'] }}">
-                        <span class="size-1.5 rounded-full {{ $t['dot'] }}"></span>{{ $t['label'] }}
-                    </span>
-                </x-ui.table.td>
-
-                <x-ui.table.td>
-                    <div class="text-sm font-medium text-foreground">{{ $s['curricula'] }} kurikulum</div>
-                    <div class="text-xs text-secondary mt-1 truncate">{{ $s['majors'] }} jurusan</div>
-                </x-ui.table.td>
-
-                <x-ui.table.td>
-                    <div class="flex items-center gap-1.5">
-                        <button type="button" title="Edit" aria-label="Edit" class="size-9 inline-flex items-center justify-center rounded-lg border border-border bg-white text-secondary hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                            <i data-lucide="pencil" class="size-4"></i>
-                        </button>
-                        <button type="button" title="Hapus" aria-label="Hapus" class="size-9 inline-flex items-center justify-center rounded-lg border border-border bg-white text-secondary hover:border-error hover:text-error transition-colors cursor-pointer">
-                            <i data-lucide="trash-2" class="size-4"></i>
-                        </button>
+                    @if ($s->is_religion_subject)
+                    <div class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 text-xs font-semibold">
+                        <span class="size-1.5 rounded-full bg-indigo-500"></span>Agama (Terkait)
                     </div>
+                    @if ($s->religion)
+                    <div class="text-xs text-secondary mt-1 truncate">
+                        Terkait: <span class="font-medium text-foreground">{{ $s->religion }}</span>
+                    </div>
+                    @endif
+                    @else
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 text-xs font-semibold">
+                        <span class="size-1.5 rounded-full bg-slate-500"></span>Umum
+                    </span>
+                    @endif
+                </x-ui.table.td>
+
+                {{-- Kolom 3: Status (Aktif | Arsip) --}}
+                <x-ui.table.td>
+                    @if ($s->isActive())
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs font-semibold">
+                        <span class="size-1.5 rounded-full bg-emerald-500"></span>Aktif
+                    </span>
+                    @else
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1 text-xs font-semibold">
+                        <span class="size-1.5 rounded-full bg-slate-400"></span>Arsip
+                    </span>
+                    @endif
+                </x-ui.table.td>
+
+                {{-- Kolom 4: Aksi (Kelola) --}}
+                <x-ui.table.td>
+                    @include('pages.academics.subjects.subject._actions', ['s' => $s])
                 </x-ui.table.td>
             </tr>
             @empty
             <tr>
-                <td colspan="5" class="px-4 py-16 text-center text-secondary">
+                <td colspan="4" class="px-4 py-16 text-center text-secondary">
                     <div class="flex flex-col items-center gap-3">
                         <i data-lucide="inbox" class="size-10 text-border"></i>
-                        <p class="font-medium text-sm">Belum ada mata pelajaran.</p>
+                        <p class="font-medium text-sm">Tidak ada mata pelajaran yang cocok.</p>
                     </div>
                 </td>
             </tr>
@@ -98,53 +85,53 @@ $typeMap = [
     {{-- ============ 2. MOBILE CARDS ============ --}}
     <div class="lg:hidden divide-y divide-border border-y border-border -mx-5 mt-2 mb-4">
         @forelse ($subjects as $s)
-        @php
-        $typeKey = is_string($s['type'] ?? null) && $s['type'] !== '' ? $s['type'] : 'default';
-        $t = $typeMap[$typeKey] ?? $typeMap['default'];
-        @endphp
-        <div id="card-subject-{{ $s['id'] }}" data-search="{{ $s['name'] }} {{ $s['code'] }} {{ $s['group'] }}" class="px-5 py-4">
+        <div id="card-subject-{{ $s->id }}" class="px-5 py-4">
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                         <i data-lucide="book-open" class="size-5 text-primary"></i>
                     </div>
                     <div class="min-w-0">
-                        <div class="font-semibold text-foreground text-sm truncate">{{ $s['name'] }}</div>
-                        <p class="text-xs text-secondary mt-1 truncate font-mono">{{ $s['code'] }}</p>
+                        <div class="font-semibold text-foreground text-sm truncate">{{ $s->name }}</div>
+                        <p class="text-xs text-secondary mt-1 truncate font-mono">{{ $s->code }}</p>
                     </div>
                 </div>
-                <span class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold {{ $t['badge'] }}">{{ $t['label'] }}</span>
+                @if ($s->isActive())
+                <span class="shrink-0 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-xs font-semibold">Aktif</span>
+                @else
+                <span class="shrink-0 rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1 text-xs font-semibold">Arsip</span>
+                @endif
             </div>
 
             <div class="mt-3 border-y border-border divide-y divide-border text-xs">
                 <div class="flex items-center justify-between gap-3 py-2.5">
-                    <p class="text-secondary flex items-center gap-1.5"><i data-lucide="layers" class="size-3.5 text-secondary/50"></i>Kelompok</p>
-                    <p class="font-medium text-foreground">{{ $s['group'] }}</p>
-                </div>
-                <div class="flex items-center justify-between gap-3 py-2.5">
-                    <p class="text-secondary flex items-center gap-1.5"><i data-lucide="library-big" class="size-3.5 text-secondary/50"></i>Kurikulum</p>
-                    <p class="font-medium text-foreground">{{ $s['curricula'] }} kurikulum</p>
-                </div>
-                <div class="flex items-center justify-between gap-3 py-2.5">
-                    <p class="text-secondary flex items-center gap-1.5"><i data-lucide="graduation-cap" class="size-3.5 text-secondary/50"></i>Jurusan</p>
-                    <p class="font-medium text-foreground">{{ $s['majors'] }} jurusan</p>
+                    <p class="text-secondary flex items-center gap-1.5"><i data-lucide="tag" class="size-3.5 text-secondary/50"></i>Kategori</p>
+                    <p class="font-medium text-foreground">
+                        @if ($s->is_religion_subject)
+                        Agama (Terkait){{ $s->religion ? ' — ' . $s->religion : '' }}
+                        @else
+                        Umum
+                        @endif
+                    </p>
                 </div>
             </div>
 
-            <div class="mt-3 flex items-center justify-end gap-1.5">
-                <button type="button" title="Edit" aria-label="Edit" class="size-9 inline-flex items-center justify-center rounded-lg border border-border bg-white text-secondary hover:border-primary hover:text-primary transition-colors cursor-pointer"><i data-lucide="pencil" class="size-4"></i></button>
-                <button type="button" title="Hapus" aria-label="Hapus" class="size-9 inline-flex items-center justify-center rounded-lg border border-border bg-white text-secondary hover:border-error hover:text-error transition-colors cursor-pointer"><i data-lucide="trash-2" class="size-4"></i></button>
+            <div class="mt-3 flex items-center justify-end">
+                @include('pages.academics.subjects.subject._actions', ['s' => $s])
             </div>
         </div>
         @empty
         <div class="px-4 py-16 text-center text-secondary">
             <div class="flex flex-col items-center gap-3">
                 <i data-lucide="inbox" class="size-10 text-border"></i>
-                <p class="font-medium text-sm">Belum ada mata pelajaran.</p>
+                <p class="font-medium text-sm">Tidak ada mata pelajaran yang cocok.</p>
             </div>
         </div>
         @endforelse
     </div>
+
+    {{-- Pagination --}}
+    <x-ui.pagination :paginator="$subjects" hxTarget="#subjects-container" />
 
     <script>
         if (typeof lucide !== 'undefined') {

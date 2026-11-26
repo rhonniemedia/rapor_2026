@@ -1,6 +1,6 @@
-{{-- File: resources/views/pages/admin/rapor/curricula/partials/_modal-delete.blade.php --}}
+{{-- File: resources/views/pages/academics/relations/curriculum/_modal-delete.blade.php --}}
 @php
-    $inUse = $curriculum->academic_year_curricula_count > 0;
+$inUse = $curriculum->academic_year_curricula_count > 0;
 @endphp
 
 <div x-data="{ open: false, deleting: false }"
@@ -45,7 +45,7 @@
 
             @unless ($inUse)
             <button type="button"
-                hx-delete="{{ route('admin.rapor.curricula.destroy', $curriculum->id) }}"
+                hx-delete="{{ route('rapor.curricula.destroy', $curriculum->id) }}"
                 hx-target="#curricula-container"
                 hx-swap="outerHTML"
                 hx-headers='{"X-CSRF-TOKEN": "{{ csrf_token() }}"}'

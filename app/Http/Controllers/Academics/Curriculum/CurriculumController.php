@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Academics\Curriculum;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Rapor\CurriculumRequest;
 use App\Models\CoreAcademicYear;
 use App\Models\Rapor\Curriculum;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,13 +20,18 @@ class CurriculumController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $this->filters($request->query());
+        $query = $request->query();
+        $filters = $this->filters($query);
+        $ay = $this->academicYearFilters($query);
 
+        // Kedua daftar selalu dimuat: pencarian HTMX memakai hx-select pada respons halaman penuh,
+        // jadi #curricula-container dan #academic-years-container harus ada di setiap respons.
         return view(self::VIEW . '.index', [
-            'curricula' => $this->paginate($filters),
-            'academicYears' => $request->headers->has('HX-Request') ? collect() : CoreAcademicYear::forList()->get(),
+            'curricula' => $this->paginate($filters, $ay),
+            'academicYears' => $this->paginateAcademicYears($filters, $ay),
             'search' => $filters['search'],
             'filterStatus' => $filters['status'],
+            'ayearSearch' => $ay['search'],
             'statusOptions' => Curriculum::statusOptions(),
         ]);
     }
@@ -59,16 +65,17 @@ class CurriculumController extends Controller
 
     /* ------------------------------------------------------------------ */
     /*  Aksi tulis. Respons = fragmen tabel (#curricula-container)        */
+    /*  Gagal validasi ditangani CurriculumRequest::failedValidation().   */
     /* ------------------------------------------------------------------ */
 
-    public function store(Request $request)
+    public function store(CurriculumRequest $request)
     {
         Curriculum::create($request->validated());
 
         return $this->tableResponse($request, $this->notify('Kurikulum berhasil ditambahkan.'));
     }
 
-    public function update(Request $request, Curriculum $curriculum)
+    public function update(CurriculumRequest $request, Curriculum $curriculum)
     {
         $curriculum->update($request->validated());
 
@@ -106,7 +113,7 @@ class CurriculumController extends Controller
     /*  Helper                                                            */
     /* ------------------------------------------------------------------ */
 
-    /** Normalisasi query string: search, filter_status, page. */
+    /** Normalisasi query string kurikulum: search, filter_status, page. */
     private function filters(array $query): array
     {
         $status = $query['filter_status'] ?? '';
@@ -118,7 +125,26 @@ class CurriculumController extends Controller
         ];
     }
 
-    private function paginate(array $filters): LengthAwarePaginator
+    /** Normalisasi query string tahun ajaran: ay_search, ay_page. */
+    private function academicYearFilters(array $query): array
+    {
+        return [
+            'search' => trim((string) ($query['ay_search'] ?? '')),
+            'page' => max(1, (int) ($query['ay_page'] ?? 1)),
+        ];
+    }
+
+    /** Parameter yang dipertahankan di semua link paginasi. */
+    private function listParams(array $filters, array $ay): array
+    {
+        return array_filter([
+            'search' => $filters['search'],
+            'filter_status' => $filters['status'],
+            'ay_search' => $ay['search'],
+        ]);
+    }
+
+    private function paginate(array $filters, array $ay = ['search' => '', 'page' => 1]): LengthAwarePaginator
     {
         return Curriculum::query()
             ->withCount(['academicYearCurricula', 'curriculumSubjects'])
@@ -128,10 +154,16 @@ class CurriculumController extends Controller
             ->orderBy('name')
             ->paginate(self::PER_PAGE, ['*'], 'page', $filters['page'])
             ->withPath(route('rapor.curricula.index'))
-            ->appends(array_filter([
-                'search' => $filters['search'],
-                'filter_status' => $filters['status'],
-            ]));
+            ->appends($this->listParams($filters, $ay));
+    }
+
+    private function paginateAcademicYears(array $filters, array $ay): LengthAwarePaginator
+    {
+        return CoreAcademicYear::forList()
+            ->search($ay['search'])
+            ->paginate(self::PER_PAGE, ['*'], 'ay_page', $ay['page'])
+            ->withPath(route('rapor.curricula.index'))
+            ->appends($this->listParams($filters, $ay));
     }
 
     /**
@@ -142,13 +174,14 @@ class CurriculumController extends Controller
     {
         parse_str((string) parse_url((string) $request->header('HX-Current-URL'), PHP_URL_QUERY), $query);
         $filters = $this->filters($query);
+        $ay = $this->academicYearFilters($query);
 
-        $list = $this->paginate($filters);
+        $list = $this->paginate($filters, $ay);
 
         // Setelah hapus, halaman terakhir bisa kosong → mundur ke halaman terakhir yang ada.
         if ($list->isEmpty() && $list->currentPage() > 1) {
             $filters['page'] = $list->lastPage();
-            $list = $this->paginate($filters);
+            $list = $this->paginate($filters, $ay);
         }
 
         return response()
@@ -159,10 +192,19 @@ class CurriculumController extends Controller
             ->withHeaders($headers);
     }
 
-    /** Header HX-Trigger: event "notify" (toast) dan "close-modal". */
+    /**
+     * Header HX-Trigger: event "showAlert" (dijembatani layout app.blade.php ke window.ShowAlert)
+     * dan "close-modal" (didengar partial modal).
+     */
     private function notify(string $message, string $type = 'success', bool $closeModal = true): array
     {
-        $events = ['notify' => ['type' => $type, 'message' => $message]];
+        $events = [
+            'showAlert' => [
+                'type' => $type,
+                'title' => $type === 'success' ? 'Berhasil' : 'Gagal',
+                'message' => $message,
+            ],
+        ];
 
         if ($closeModal) {
             $events['close-modal'] = true;

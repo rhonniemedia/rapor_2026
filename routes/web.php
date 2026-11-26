@@ -29,31 +29,32 @@ Route::middleware(['auth', AuthorizeAppAccess::class, ShareAcademicPeriod::class
 
     // Working features (scores, attendance, reports, ...) are added per stage and are protected with
     // ->middleware('can:use-rapor') plus Policies on the objects.
+
+    // Relasi Akademik: kurikulum (CRUD lewat modal HTMX).
+    Route::prefix('academics/curriculum')->name('rapor.curricula.')->controller(CurriculumController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{curriculum}/edit', 'edit')->name('edit');
+        Route::put('/{curriculum}', 'update')->name('update');
+        Route::patch('/{curriculum}/status', 'toggleStatus')->name('toggle-status');
+        Route::get('/{curriculum}/delete', 'confirmDelete')->name('confirm-delete');
+        Route::delete('/{curriculum}', 'destroy')->name('destroy');
+    });
 });
 
-Route::prefix('academics/curriculum')->name('rapor.curricula.')->controller(CurriculumController::class)->group(function () {
-    Route::get('/', 'index')->name('index');
-    Route::get('/create', 'create')->name('create');
-    Route::post('/', 'store')->name('store');
-    Route::get('/{curriculum}/edit', 'edit')->name('edit');
-    Route::put('/{curriculum}', 'update')->name('update');
-    Route::patch('/{curriculum}/status', 'toggleStatus')->name('toggle-status');
-    Route::get('/{curriculum}/delete', 'confirmDelete')->name('confirm-delete');
-    Route::delete('/{curriculum}', 'destroy')->name('destroy');
-});
-
-
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', AuthorizeAppAccess::class, ShareAcademicPeriod::class])->group(function () {
     Route::prefix('academics/subjects')
         ->name('academics.subjects.')
         ->controller(SubjectController::class)
         ->group(function () {
             Route::get('/', 'index')->name('index');
-            // Tambahkan route lain bila dibutuhkan, misalnya:
-            // Route::get('/create', 'create')->name('create');
-            // Route::post('/', 'store')->name('store');
-            // Route::get('/{subject}/edit', 'edit')->name('edit');
-            // Route::put('/{subject}', 'update')->name('update');
-            // Route::delete('/{subject}', 'destroy')->name('destroy');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/', 'store')->name('store');
+            Route::get('/{subject}/edit', 'edit')->name('edit');
+            Route::put('/{subject}', 'update')->name('update');
+            Route::patch('/{subject}/status', 'toggleStatus')->name('toggle-status');
+            Route::get('/{subject}/delete', 'confirmDelete')->name('confirm-delete');
+            Route::delete('/{subject}', 'destroy')->name('destroy');
         });
 });
